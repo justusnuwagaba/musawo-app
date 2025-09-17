@@ -1,0 +1,4 @@
+{
+    "bitoAI.codeCompletion.enableAutoCompletion": true,
+    "bitoAI.appearance.theme": "\"Light\" or \"Dark\" matching IDE"
+}
