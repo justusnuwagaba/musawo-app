@@ -248,8 +248,8 @@ export default function DoctorDashboardScreen({ navigation }) {
             onPress={handleToggleOnline}
             disabled={togglingOnline}
           >
-            <Icon name={isOnline ? 'radio-button-on' : 'radio-button-off'} size={16} color={isOnline ? colors.onSecondary : colors.white} />
-            <Text style={[styles.statusText, isOnline && { color: colors.onSecondary }]}>{isOnline ? 'Online' : 'Offline'}</Text>
+            <Icon name={isOnline ? 'radio-button-on' : 'radio-button-off'} size={16} color={isOnline ? colors.onPrimary : colors.white} />
+            <Text style={[styles.statusText, isOnline && { color: colors.onPrimary }]}>{isOnline ? 'Online' : 'Offline'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -313,7 +313,7 @@ export default function DoctorDashboardScreen({ navigation }) {
                     <Text style={styles.declineText}>Decline</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.acceptButton} onPress={() => handleAcceptConsult(request)}>
-                    <Icon name="videocam" size={18} color={colors.onSecondary} />
+                    <Icon name="videocam" size={18} color={colors.onPrimary} />
                     <Text style={styles.acceptText}>Accept</Text>
                   </TouchableOpacity>
                 </View>
@@ -356,8 +356,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radii.pill,
   },
+  // Green, not cyan — this is the doctor's own status on the doctor's own
+  // screen. Per theme/tokens.js's documented convention, cyan is reserved
+  // for the doctor's presence as seen BY THE PATIENT (e.g. a future map
+  // pin), not the doctor's own self-facing UI.
   online: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.primary,
   },
   offline: {
     backgroundColor: colors.inkFaint,
@@ -366,7 +370,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: fontWeight.bold,
     marginLeft: spacing.xs,
-    // Overridden inline to onSecondary while online — see the JSX
+    // Overridden inline to onPrimary while online — see the JSX
     // conditional on the status icon just above the styles.
   },
   statsRow: {
@@ -477,18 +481,20 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: fontWeight.bold,
   },
+  // Same green-not-cyan reasoning as `online` above — Accept is the
+  // doctor's own action on the doctor's own screen.
   acceptButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.pill,
   },
   acceptText: {
-    color: colors.onSecondary,
+    color: colors.onPrimary,
     fontWeight: fontWeight.bold,
     marginLeft: spacing.xs,
   },
