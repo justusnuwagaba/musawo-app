@@ -429,6 +429,36 @@ service cloud.firestore {
     match /lab/{id} { allow get, list: if isSignedIn(); allow write: if false; }
     match /insurance/{id} { allow get, list: if isSignedIn(); allow write: if false; }
 
+    // Patient bookings against any of the six catalog collections above —
+    // one shared collection distinguished by `category`, rather than six
+    // near-identical ones, since ServiceScreenTemplate/ServiceBookingScreen
+    // are themselves already generalized across all six. Price is
+    // cross-checked against the canonical catalog item's price (same
+    // get()-in-rules technique as payments.consultationFee above), so a
+    // tampered client can't book at a fabricated price. The `category in
+    // [...]` check runs first and short-circuits before the get() call, so
+    // a malformed/attacker-supplied category can't be used to probe an
+    // unrelated collection via the dynamic path below.
+    match /serviceOrders/{orderId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.status == 'requested'
+        && request.resource.data.category in
+             ['lab', 'vaccination', 'chronicIllness', 'healthScreening', 'pharmacy', 'insurance']
+        && request.resource.data.price ==
+             get(/databases/$(database)/documents/$(request.resource.data.category)/$(request.resource.data.itemId)).data.price;
+      // Patient may update their own order (e.g. cancel it); admin manages
+      // the fulfillment lifecycle (confirm/complete/cancel) via
+      // admin/ServiceOrdersTab.js.
+      allow update: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

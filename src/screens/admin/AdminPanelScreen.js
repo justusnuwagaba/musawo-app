@@ -7,6 +7,7 @@ import DoctorVerificationTab from './DoctorVerificationTab';
 import UserManagementTab from './UserManagementTab';
 import PricingConfigTab from './PricingConfigTab';
 import TransactionsTab from './TransactionsTab';
+import ServiceOrdersTab from './ServiceOrdersTab';
 import SafetyReportsTab from './SafetyReportsTab';
 import AuditLogTab from './AuditLogTab';
 import { colors, spacing, radii, fontSize, fontWeight } from '../../theme/tokens';
@@ -17,6 +18,7 @@ const TABS = [
   { key: 'users', label: 'Users', component: UserManagementTab },
   { key: 'pricing', label: 'Pricing', component: PricingConfigTab },
   { key: 'transactions', label: 'Transactions', component: TransactionsTab },
+  { key: 'orders', label: 'Service Orders', component: ServiceOrdersTab },
   { key: 'safety', label: 'Safety Reports', component: SafetyReportsTab },
   { key: 'audit', label: 'Audit Log', component: AuditLogTab, superadminOnly: true },
 ];

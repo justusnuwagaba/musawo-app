@@ -49,6 +49,7 @@ export const PATIENT_ROUTES = {
   SCREENING_HOME: 'ScreeningHome',
   VACCINATION_HOME: 'VaccinationHome',
   LAB_HOME: 'LabHome',
+  SERVICE_BOOKING: 'ServiceBooking',
 };
 
 export const DOCTOR_ROUTES = {

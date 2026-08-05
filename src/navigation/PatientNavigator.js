@@ -30,6 +30,7 @@ import PharmacyHome from '../screens/patient/PharmacyHome';
 import ScreeningHome from '../screens/patient/ScreeningHome';
 import VaccinationHome from '../screens/patient/VaccinationHome';
 import LabHomeScreen from '../screens/patient/LabHomeScreen';
+import ServiceBookingScreen from '../screens/patient/ServiceBookingScreen';
 import ChatListScreen from '../screens/shared/ChatListScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
@@ -101,6 +102,11 @@ export function AccountStack() {
       <Stack.Screen name={PATIENT_ROUTES.SCREENING_HOME} component={ScreeningHome} options={{ title: 'Health Screening' }} />
       <Stack.Screen name={PATIENT_ROUTES.VACCINATION_HOME} component={VaccinationHome} options={{ title: 'Vaccination' }} />
       <Stack.Screen name={PATIENT_ROUTES.LAB_HOME} component={LabHomeScreen} options={{ title: 'Lab' }} />
+      <Stack.Screen
+        name={PATIENT_ROUTES.SERVICE_BOOKING}
+        component={ServiceBookingScreen}
+        options={({ route }) => ({ title: route.params?.categoryLabel ? `Request ${route.params.categoryLabel}` : 'Request Service' })}
+      />
     </Stack.Navigator>
   );
 }
