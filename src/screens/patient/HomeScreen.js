@@ -25,6 +25,12 @@ const NUM_COLUMNS = 2;
 const ITEM_MARGIN = spacing.md;
 const ITEM_SIZE = (width - spacing.lg * 2 - ITEM_MARGIN) / NUM_COLUMNS;
 
+// Cycled by index across the service grid so the icon badges read as a set
+// rather than every card looking identical — same three dim/saturated pairs
+// used elsewhere in the design system, no new colors.
+const ICON_BADGE_BG = [colors.primaryMuted, colors.secondaryMuted, colors.accentLight];
+const ICON_BADGE_COLOR = [colors.primary, colors.secondary, colors.accent];
+
 export default function HomeScreen({ navigation }) {
   const { t } = useTranslation();
   const { user, profile, isLoading: isUserLoading } = useUserContext();
@@ -95,11 +101,12 @@ export default function HomeScreen({ navigation }) {
 
         <FlatList
           data={services}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <TouchableOpacity style={styles.serviceCard} onPress={() => handleServicePress(item)}>
-              <Icon name={item.icon || 'star-outline'} size={26} color={colors.primary} />
-              <Text style={styles.serviceTitle}>{item.title}</Text>
-              <Text style={styles.serviceSubtitle} numberOfLines={2}>{item.subtitle}</Text>
+              <View style={[styles.serviceIconBadge, { backgroundColor: ICON_BADGE_BG[index % ICON_BADGE_BG.length] }]}>
+                <Icon name={item.icon || 'star-outline'} size={20} color={ICON_BADGE_COLOR[index % ICON_BADGE_COLOR.length]} />
+              </View>
+              <Text style={styles.serviceTitle} numberOfLines={1}>{item.title}</Text>
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id}
@@ -179,22 +186,23 @@ const styles = StyleSheet.create({
   },
   serviceCard: {
     width: ITEM_SIZE,
-    height: ITEM_SIZE,
+    height: 92,
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radii.md,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     ...shadow.card,
   },
+  serviceIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   serviceTitle: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: colors.ink,
-    marginTop: spacing.sm,
-  },
-  serviceSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.inkMuted,
-    marginTop: 4,
   },
 });
