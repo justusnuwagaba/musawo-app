@@ -4,12 +4,27 @@ import Icon from '@expo/vector-icons/Ionicons';
 import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db as firestore } from '../../config/firebaseConfig';
 import { useUserContext } from '../../context/UserProvider';
+import Avatar from '../../components/Avatar';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { showAlert } from '../../components/AppAlert';
 import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../theme/tokens';
+
+// item.submittedAt is already on each application doc (written by
+// DoctorApplicationScreen) — no extra query needed, just wasn't rendered.
+function formatRelativeTime(timestamp) {
+  if (!timestamp?.toDate) return null;
+  const diffMin = Math.floor((Date.now() - timestamp.toDate().getTime()) / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return timestamp.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 export default function DoctorVerificationTab() {
   const { user } = useUserContext();
@@ -103,42 +118,58 @@ export default function DoctorVerificationTab() {
       data={applications}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <Text style={styles.name}>{item.fullName}</Text>
-          <Text style={styles.specialty}>{item.specialty} · {item.yearsExperience || 0} yrs experience</Text>
-          <Text style={styles.detail}>License {item.licenseNumber} — {item.issuingBody}</Text>
-          {!!item.languagesSpoken?.length && <Text style={styles.detail}>Speaks: {item.languagesSpoken.join(', ')}</Text>}
-          {!!item.bio && <Text style={styles.bio}>{item.bio}</Text>}
-
-          <Text style={styles.docsHeading}>Documents ({item.documents?.length || 0})</Text>
-          {item.documents?.length ? (
-            item.documents.map((docItem, index) => (
-              <TouchableOpacity key={docItem.url || index} style={styles.docRow} onPress={() => Linking.openURL(docItem.url)}>
-                <Icon name={docItem.mimeType?.includes('pdf') ? 'document-text-outline' : 'image-outline'} size={16} color={colors.primary} />
-                <Text style={styles.docName} numberOfLines={1}>{docItem.fileName || 'Document'}</Text>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={styles.docsWarning}>No documents uploaded yet</Text>
-          )}
-
-          {rejectingId === item.id ? (
-            <View style={styles.rejectForm}>
-              <Input placeholder="Reason for rejection (shown to the applicant)" value={rejectionReason} onChangeText={setRejectionReason} multiline />
-              <View style={styles.actionsRow}>
-                <Button title="Confirm reject" variant="outline" onPress={() => handleReject(item)} loading={submittingId === item.id} style={styles.actionButton} />
-                <Button title="Cancel" variant="ghost" onPress={() => { setRejectingId(null); setRejectionReason(''); }} style={styles.actionButton} />
+      ListHeaderComponent={
+        applications.length > 0 ? (
+          <Text style={styles.pendingCount}>
+            {applications.length} pending application{applications.length === 1 ? '' : 's'}
+          </Text>
+        ) : null
+      }
+      renderItem={({ item }) => {
+        const submittedLabel = formatRelativeTime(item.submittedAt);
+        return (
+          <View style={styles.card}>
+            <View style={styles.topRow}>
+              <Avatar name={item.fullName} size="sm" />
+              <View style={styles.headerText}>
+                <Text style={styles.name}>{item.fullName}</Text>
+                <Text style={styles.specialty}>{item.specialty} · {item.yearsExperience || 0} yrs experience</Text>
               </View>
+              {!!submittedLabel && <Text style={styles.submittedTime}>{submittedLabel}</Text>}
             </View>
-          ) : (
-            <View style={styles.actionsRow}>
-              <Button title="Approve" onPress={() => handleApprove(item)} loading={submittingId === item.id} style={styles.actionButton} />
-              <Button title="Reject" variant="outline" onPress={() => setRejectingId(item.id)} style={styles.actionButton} />
-            </View>
-          )}
-        </View>
-      )}
+            <Text style={styles.detail}>License {item.licenseNumber} — {item.issuingBody}</Text>
+            {!!item.languagesSpoken?.length && <Text style={styles.detail}>Speaks: {item.languagesSpoken.join(', ')}</Text>}
+            {!!item.bio && <Text style={styles.bio}>{item.bio}</Text>}
+
+            <Text style={styles.docsHeading}>Documents ({item.documents?.length || 0})</Text>
+            {item.documents?.length ? (
+              item.documents.map((docItem, index) => (
+                <TouchableOpacity key={docItem.url || index} style={styles.docRow} onPress={() => Linking.openURL(docItem.url)}>
+                  <Icon name={docItem.mimeType?.includes('pdf') ? 'document-text-outline' : 'image-outline'} size={16} color={colors.primary} />
+                  <Text style={styles.docName} numberOfLines={1}>{docItem.fileName || 'Document'}</Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.docsWarning}>No documents uploaded yet</Text>
+            )}
+
+            {rejectingId === item.id ? (
+              <View style={styles.rejectForm}>
+                <Input placeholder="Reason for rejection (shown to the applicant)" value={rejectionReason} onChangeText={setRejectionReason} multiline />
+                <View style={styles.actionsRow}>
+                  <Button title="Confirm reject" variant="outline" onPress={() => handleReject(item)} loading={submittingId === item.id} style={styles.actionButton} />
+                  <Button title="Cancel" variant="ghost" onPress={() => { setRejectingId(null); setRejectionReason(''); }} style={styles.actionButton} />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.actionsRow}>
+                <Button title="Approve" onPress={() => handleApprove(item)} loading={submittingId === item.id} style={styles.actionButton} />
+                <Button title="Reject" variant="outline" onPress={() => setRejectingId(item.id)} style={styles.actionButton} />
+              </View>
+            )}
+          </View>
+        );
+      }}
       ListEmptyComponent={
         <EmptyState icon="checkmark-done-outline" title="No pending applications" message="New doctor applications will show up here for review." />
       }
@@ -151,12 +182,33 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     flexGrow: 1,
   },
+  pendingCount: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.inkMuted,
+    marginBottom: spacing.md,
+  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.md,
     padding: spacing.md,
     marginBottom: spacing.md,
     ...shadow.card,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  headerText: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  submittedTime: {
+    flexShrink: 0,
+    fontSize: fontSize.xs,
+    color: colors.inkFaint,
+    marginLeft: spacing.sm,
   },
   name: {
     fontSize: fontSize.md,
