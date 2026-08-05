@@ -11,6 +11,11 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { showAlert } from '../../components/AppAlert';
 import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../theme/tokens';
 
+function formatDateTime(timestamp) {
+  if (!timestamp?.toDate) return null;
+  return timestamp.toDate().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 function StatCard({ icon, label, value, color }) {
   return (
     <View style={[styles.statCard, { borderLeftColor: color }]}>
@@ -124,21 +129,25 @@ export default function TransactionsTab() {
           />
         </>
       }
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.patientName}>{item.patientName}</Text>
-            <Text style={styles.amount}>UGX {item.amount?.toLocaleString()}</Text>
+      renderItem={({ item }) => {
+        const dateLabel = formatDateTime(item.createdAt);
+        return (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.patientName}>{item.patientName}</Text>
+              <Text style={styles.amount}>+UGX {item.amount?.toLocaleString()}</Text>
+            </View>
+            <Text style={styles.doctorName}>to {item.doctorName}</Text>
+            {!!dateLabel && <Text style={styles.dateLabel}>{dateLabel}</Text>}
+            <Text style={styles.breakdown}>
+              Commission UGX {item.commissionAmount?.toLocaleString()} · Doctor earns UGX {item.doctorEarnings?.toLocaleString()}
+            </Text>
+            {item.status === 'pending' && (
+              <Button title="Mark as paid (manual)" variant="outline" onPress={() => handleMarkPaid(item)} loading={markingId === item.id} style={styles.markButton} />
+            )}
           </View>
-          <Text style={styles.doctorName}>to {item.doctorName}</Text>
-          <Text style={styles.breakdown}>
-            Commission UGX {item.commissionAmount?.toLocaleString()} · Doctor earns UGX {item.doctorEarnings?.toLocaleString()}
-          </Text>
-          {item.status === 'pending' && (
-            <Button title="Mark as paid (manual)" variant="outline" onPress={() => handleMarkPaid(item)} loading={markingId === item.id} style={styles.markButton} />
-          )}
-        </View>
-      )}
+        );
+      }}
       ListEmptyComponent={<EmptyState icon="receipt-outline" title="No transactions" message={`No ${statusFilter} payments right now.`} />}
     />
   );
@@ -213,6 +222,11 @@ const styles = StyleSheet.create({
   doctorName: {
     fontSize: fontSize.sm,
     color: colors.inkMuted,
+    marginTop: 2,
+  },
+  dateLabel: {
+    fontSize: fontSize.xs,
+    color: colors.inkFaint,
     marginTop: 2,
   },
   breakdown: {
