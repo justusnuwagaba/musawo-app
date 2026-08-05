@@ -1,33 +1,63 @@
 {
   "expo": {
-    "name": "telehealthapp",
-    "slug": "snack-1fb29b10-cd48-47bb-b120-8985bc6c6f4b",
+    "name": "Musawo",
+    "slug": "musawo-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#070B09"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.musawo.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Musawo needs access to your camera for video consultations.",
+        "NSMicrophoneUsageDescription": "Musawo needs access to your microphone for audio and video consultations.",
+        "NSLocationWhenInUseUsageDescription": "Musawo uses your location to find doctors near you."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.musawo.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      "expo-av",
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Musawo uses your location to find doctors near you."
+        }
+      ],
+      "expo-notifications"
+    ],
     "newArchEnabled": true,
     "extra": {
       "eas": {
         "projectId": "46952e51-5e92-4e3c-b8f9-82f100c454cd"
       }
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/46952e51-5e92-4e3c-b8f9-82f100c454cd"
     }
   }
 }

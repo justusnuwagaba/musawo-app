@@ -1,0 +1,436 @@
+rules_version = '2';
+
+// Security model: role is read ONLY from the custom claim on the auth token
+// (request.auth.token.role), never from a client-supplied field or a
+// Firestore document. Custom claims are set exclusively by Cloud Functions
+// using the Admin SDK (functions/index.js), which also bypasses these rules
+// entirely — so "admin-only" writes below are enforced by making sure no
+// client path can perform them directly, not by trusting a role check on
+// data the client controls.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function role() {
+      return isSignedIn() ? request.auth.token.role : null;
+    }
+
+    function isAdmin() {
+      return role() == 'admin' || role() == 'superadmin';
+    }
+
+    // Fields only a Cloud Function (Admin SDK) may ever set.
+    function touchesProtectedUserFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['role', 'isVerified', 'isBanned', 'verificationStatus']);
+    }
+
+    // The one narrow, self-service exception to the protected-fields lock:
+    // a patient submitting a doctor application flips their own role to
+    // 'doctor' so the app routes them to the verification-pending screen —
+    // but only ever to the unverified/pending state, touching only these
+    // three fields, and never patient->admin or ->isVerified=true. Anything
+    // beyond this exact shape (e.g. sneaking isBanned into the same write)
+    // falls through to touchesProtectedUserFields() and is rejected.
+    function isSelfDoctorApplication() {
+      return resource.data.role == 'patient'
+        && request.resource.data.role == 'doctor'
+        && request.resource.data.isVerified == false
+        && request.resource.data.verificationStatus == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['role', 'isVerified', 'verificationStatus', 'updatedAt']);
+    }
+
+    // A previously-rejected doctor resubmitting: role/isVerified stay
+    // unchanged (both already 'doctor'/false, so they never appear in
+    // diff().affectedKeys() at all — only a changed value counts as
+    // "affected"), only verificationStatus flips back to pending.
+    function isSelfDoctorResubmission() {
+      return resource.data.role == 'doctor'
+        && resource.data.verificationStatus == 'rejected'
+        && request.resource.data.verificationStatus == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['verificationStatus', 'updatedAt']);
+    }
+
+    // Admin approve/reject — interim rules-only path since
+    // reviewDoctorApplication (Cloud Function) can't deploy without Blaze.
+    // Nothing in these rules ever gates on a 'doctor' custom claim (every
+    // doctor-scoped check elsewhere compares request.auth.uid directly
+    // against a doc's doctorId field), so skipping the claim the Cloud
+    // Function would have set costs nothing security-wise here — only the
+    // adminAuditLog write and push notification are deferred. Revisit once
+    // Blaze is enabled: move this into that Function for both of those.
+    function isAdminDoctorReview() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['isVerified', 'verificationStatus', 'rejectionReason', 'updatedAt']);
+    }
+
+    // Admin ban/unban — same interim-rules reasoning as isAdminDoctorReview()
+    // above, and safe for the same kind of reason: isBanned is never checked
+    // by a custom claim or read anywhere else in these rules to gate an
+    // action, it's purely a protected Firestore field. setUserRole's
+    // admin-grant path is NOT given the same treatment — the isAdmin()
+    // claim this whole ruleset relies on can only be set by a Cloud
+    // Function, so a client-only role write would leave someone LOOKING
+    // like an admin in the UI while every real admin write still gets
+    // rejected here. That one stays Cloud-Function-only until Blaze; see
+    // scripts/setUserRole.js for the interim workaround.
+    function isAdminBanToggle() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isBanned', 'updatedAt']);
+    }
+
+    match /users/{uid} {
+      // Any signed-in user can look up a profile (needed to browse doctor
+      // profiles / read the other participant's name in a chat/appointment).
+      // Field-level redaction of sensitive data on non-owner reads is a known
+      // MVP limitation — avoid storing anything secret directly on this doc.
+      allow get, list: if isSignedIn();
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'patient'
+        && request.resource.data.isVerified == false;
+      allow update: if isOwner(uid)
+        && (!touchesProtectedUserFields() || isSelfDoctorApplication() || isSelfDoctorResubmission());
+      allow update: if isAdmin() && isAdminDoctorReview();
+      allow update: if isAdmin() && isAdminBanToggle();
+      allow delete: if false;
+
+      match /children/{childId} {
+        allow read, write: if isOwner(uid);
+        allow get: if isAdmin();
+      }
+    }
+
+    match /doctorApplications/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.status == 'pending';
+
+      // Owner may freely edit their own submitted fields, and may resubmit
+      // after a rejection (status: rejected -> pending) — but never touch
+      // reviewedAt/reviewedBy/rejectionReason themselves, and never set
+      // status to 'approved'.
+      allow update: if isOwner(uid) && (
+        (resource.data.status == 'rejected' && request.resource.data.status == 'pending')
+        || !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['status', 'reviewedAt', 'reviewedBy', 'rejectionReason'])
+      );
+
+      // Admin review — same interim rules-only reasoning as
+      // isAdminDoctorReview() above.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy', 'rejectionReason'])
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.status in ['approved', 'rejected'];
+
+      allow delete: if false;
+    }
+
+    match /consultationQueue/{queueId} {
+      allow create: if isSignedIn() && request.resource.data.patientId == request.auth.uid;
+      // get AND list both check resource.data here — Firestore evaluates a
+      // list query's rule per candidate document, so this correctly scopes
+      // an unconstrained "list" attempt down to only the caller's own queue
+      // entries, not the whole collection (see the same fix on /chats below).
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.matchedDoctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.matchedDoctorId == request.auth.uid ||
+        request.resource.data.matchedDoctorId == request.auth.uid
+      );
+      allow delete: if false;
+    }
+
+    match /appointments/{appointmentId} {
+      allow create: if isSignedIn() && (
+        request.resource.data.patientId == request.auth.uid ||
+        request.resource.data.doctorId == request.auth.uid
+      );
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if false;
+    }
+
+    match /medicalRecords/{recordId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.doctorId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (
+        resource.data.doctorId == request.auth.uid || isAdmin()
+      );
+    }
+
+    match /labResults/{resultId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /chats/{appointmentId} {
+      // list checks resource.data.participants — an earlier draft had
+      // `allow list: if isSignedIn()` with no participant check, which would
+      // have let any signed-in user list every chat thread's metadata
+      // (participants + last message preview) system-wide. Firestore
+      // evaluates a list query's rule per candidate document, so requiring
+      // the participants check here correctly scopes a client's
+      // where('participants','array-contains',uid) query down to just their
+      // own threads.
+      //
+      // get is a separate rule from list: ChatScreen's "ensure the chat doc
+      // exists" flow does a get() on a chat that may not have been created
+      // yet, and resource is null for a get() on a nonexistent document —
+      // accessing resource.data.participants on null throws, which Firestore
+      // treats as denied, blocking that very first read before the client
+      // ever gets a chance to create the doc. The !exists() escape hatch
+      // lets a signed-in user confirm "not found" (which leaks nothing,
+      // since there's no data to leak) without requiring participancy on a
+      // document that doesn't exist yet.
+      allow get: if isSignedIn() && (
+        !exists(/databases/$(database)/documents/chats/$(appointmentId)) ||
+        request.auth.uid in resource.data.participants
+      );
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants;
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
+
+      function isChatParticipant() {
+        return isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(appointmentId)).data.participants;
+      }
+
+      match /messages/{messageId} {
+        allow read: if isChatParticipant();
+        allow create: if isChatParticipant() && request.resource.data.senderId == request.auth.uid;
+        // Edits limited to marking read / soft-delete-for-me / delete-for-everyone
+        // within a short window, enforced by the sender or recipient only.
+        allow update: if isChatParticipant();
+        allow delete: if false;
+      }
+
+      match /typing/{uid} {
+        allow read: if isChatParticipant();
+        allow write: if isOwner(uid) && isChatParticipant();
+      }
+    }
+
+    match /notifications/{uid}/items/{notificationId} {
+      allow get, list: if isOwner(uid);
+      // Notifications are authored by Cloud Functions (Admin SDK); clients
+      // may only flip isRead on their own notifications.
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow create, delete: if false;
+    }
+
+    match /payments/{appointmentId} {
+      // Widened from patient-only to also let the doctor read their own
+      // earnings records (needed for DoctorDashboardScreen's earnings summary).
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Cross-checks consultationFee/commissionRate against the canonical
+      // server-held values (doctor's profile, admin commission config) so a
+      // tampered client can't shortchange the doctor/platform — same
+      // get()-in-rules technique as isChatParticipant() above. Discount-
+      // amount math itself is NOT cross-validated here (would require
+      // replicating percentage/fixed arithmetic in rules) — accepted as a
+      // deliberate v1 trust gap since promo codes are low-value/low-risk.
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.consultationFee ==
+             get(/databases/$(database)/documents/users/$(request.resource.data.doctorId)).data.consultationFee
+        && request.resource.data.commissionRate ==
+             get(/databases/$(database)/documents/config/commission).data.defaultRate
+        && request.resource.data.amount is number && request.resource.data.amount >= 0
+        && request.resource.data.commissionAmount is number && request.resource.data.commissionAmount >= 0
+        && request.resource.data.doctorEarnings is number && request.resource.data.doctorEarnings >= 0
+        && request.resource.data.commissionAmount + request.resource.data.doctorEarnings == request.resource.data.amount;
+
+      // markedPaidBy must be the caller's own uid — a lightweight interim
+      // audit trail, since a client write here can't also write to
+      // adminAuditLog (Admin-SDK-only, see below) until Blaze is enabled.
+      allow update: if isAdmin() && request.resource.data.markedPaidBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Platform-wide commission rate, readable by any signed-in user (needed
+    // client-side at booking time), writable only by admins. Pure rules
+    // enforcement — no Cloud Function needed, works today on the free plan.
+    match /config/commission {
+      allow get, list: if isSignedIn();
+      allow create, update: if isAdmin()
+        && request.resource.data.defaultRate is number
+        && request.resource.data.defaultRate >= 0 && request.resource.data.defaultRate <= 1
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Promo/discount codes, doc ID == the code itself.
+    match /discounts/{code} {
+      // Any signed-in patient may look up ONE exact code by ID (get) to
+      // apply it at booking — but only admins may list the whole
+      // collection, so a patient can't enumerate/brute-force active codes.
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+
+      allow create: if isAdmin()
+        && request.resource.data.type in ['percentage', 'fixed']
+        && request.resource.data.value is number && request.resource.data.value > 0
+        && request.resource.data.active is bool
+        && request.resource.data.usageCount == 0
+        && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isAdmin();
+
+      // A patient applying a code at booking time may ONLY increment
+      // usageCount by exactly 1, and only while the code is still active,
+      // unexpired, and under its usage limit — same narrow-carve-out shape
+      // as isSelfDoctorApplication() above and the notifications isRead rule.
+      function isPatientUsageIncrement() {
+        return isSignedIn()
+          && resource.data.active == true
+          && (resource.data.expiresAt == null || resource.data.expiresAt > request.time)
+          && (resource.data.usageLimit == null || resource.data.usageCount < resource.data.usageLimit)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usageCount', 'updatedAt'])
+          && request.resource.data.usageCount == resource.data.usageCount + 1;
+      }
+      allow update: if isAdmin() || isPatientUsageIncrement();
+    }
+
+    // Ratings & reviews, doc ID == appointmentId — makes "one review per
+    // appointment" free: a resubmit is a create-on-an-existing-document,
+    // rejected before rules even run. Immutable once created.
+    match /reviews/{appointmentId} {
+      // Ratings must be readable by anyone browsing doctors, not just the
+      // patient/doctor involved — no owner restriction on read.
+      allow get, list: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.appointmentId == appointmentId
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && get(/databases/$(database)/documents/appointments/$(appointmentId)).data.patientId == request.auth.uid
+        && get(/databases/$(database)/documents/appointments/$(appointmentId)).data.status == 'completed'
+        && request.resource.data.doctorId ==
+             get(/databases/$(database)/documents/appointments/$(appointmentId)).data.doctorId;
+      allow update, delete: if false;
+    }
+
+    // Written only by Cloud Functions (Admin SDK bypasses rules); readable by
+    // admins/superadmins for moderation and audit purposes.
+    match /adminAuditLog/{logId} {
+      allow get, list: if isAdmin();
+      allow write: if false;
+    }
+
+    // USSD sessions are only ever touched by the ussdCallback Cloud Function
+    // (Admin SDK) — no client access at all.
+    match /ussdSessions/{sessionId} {
+      allow read, write: if false;
+    }
+
+    // One-time phone codes for the sendOtp/confirmOtp stubs — Admin-SDK-only,
+    // same reasoning as ussdSessions above.
+    match /otps/{phone} {
+      allow read, write: if false;
+    }
+
+    // Patient/doctor-filed reports of a problem during a call or chat.
+    // Mirrors the reviews collection's cross-doc get()-validation technique:
+    // the reporter must actually be a participant on the referenced
+    // appointment/queue doc, and the accused user must be the OTHER
+    // participant on that same doc — a client can't invent an arbitrary
+    // reportedUserId. Admin triage (status/reviewedBy/reviewedAt) is a
+    // narrow carve-out on update, same shape as payments.markedPaidBy — no
+    // Cloud Function needed today. Revisit once Blaze is enabled: a
+    // Function-mediated create would add real abuse-rate-limiting and an
+    // admin push notification via notify(), neither possible from a pure
+    // client write.
+    match /safetyReports/{reportId} {
+      allow get, list: if isAdmin();
+
+      function apptReportOk() {
+        let appt = get(/databases/$(database)/documents/appointments/$(request.resource.data.appointmentId)).data;
+        return request.resource.data.appointmentId is string
+          && request.resource.data.queueId == null
+          && (appt.patientId == request.auth.uid || appt.doctorId == request.auth.uid)
+          && request.resource.data.reportedUserId in [appt.patientId, appt.doctorId];
+      }
+
+      function queueReportOk() {
+        let q = get(/databases/$(database)/documents/consultationQueue/$(request.resource.data.queueId)).data;
+        return request.resource.data.queueId is string
+          && request.resource.data.appointmentId == null
+          && (q.patientId == request.auth.uid || q.matchedDoctorId == request.auth.uid)
+          && request.resource.data.reportedUserId in [q.patientId, q.matchedDoctorId];
+      }
+
+      allow create: if isSignedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.category in
+             ['unsafe_behavior', 'inappropriate_content', 'technical_issue', 'no_show', 'other']
+        && request.resource.data.description is string && request.resource.data.description.size() <= 1000
+        && (apptReportOk() || queueReportOk());
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt'])
+        && request.resource.data.reviewedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Curated home-screen service tiles. Nothing currently writes here (the
+    // client falls back to a hardcoded list if empty/denied) — this just
+    // silences that fallback path's console noise and allows a future
+    // admin-seeded services collection to work without a rules change.
+    match /services/{id} {
+      allow get, list: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Catalog collections behind the patient Home service tiles
+    // (Vaccination/ChronicIllness/HealthScreening/Pharmacy/Lab/Insurance).
+    // ServiceScreenTemplate.js shows a hard error (not a silent fallback) if
+    // these are denied, unlike the /services catch above — nothing writes to
+    // them yet, this just lets them be seeded and read.
+    match /vaccination/{id} { allow get, list: if isSignedIn(); allow write: if false; }
+    match /chronicIllness/{id} { allow get, list: if isSignedIn(); allow write: if false; }
+    match /healthScreening/{id} { allow get, list: if isSignedIn(); allow write: if false; }
+    match /pharmacy/{id} { allow get, list: if isSignedIn(); allow write: if false; }
+    match /lab/{id} { allow get, list: if isSignedIn(); allow write: if false; }
+    match /insurance/{id} { allow get, list: if isSignedIn(); allow write: if false; }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

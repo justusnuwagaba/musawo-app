@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Mirrors firestore.rules' isAdmin() — same custom-claim source of truth.
+    function isAdmin() {
+      return isSignedIn() &&
+        (request.auth.token.role == 'admin' || request.auth.token.role == 'superadmin');
+    }
+
+    // Same visibility model as the Firestore `users` collection: any
+    // signed-in user can view a profile picture (needed to see a doctor's or
+    // the other appointment participant's photo), only the owner can change it.
+    match /profilePictures/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Attachments live under the medicalRecords/{recordId} doc they belong
+    // to. Access mirrors that Firestore document's patientId/doctorId, read
+    // via a cross-service firestore.get() rather than duplicating the check —
+    // only the treating doctor may upload; doctor, patient, or an admin may read.
+    match /medicalRecordAttachments/{recordId}/{fileName} {
+      function record() {
+        return firestore.get(/databases/(default)/documents/medicalRecords/$(recordId)).data;
+      }
+
+      allow read: if isSignedIn() &&
+        (record().patientId == request.auth.uid || record().doctorId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && record().doctorId == request.auth.uid
+        && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
