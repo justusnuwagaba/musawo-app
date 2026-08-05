@@ -1,10 +1,11 @@
-// Seeds sample catalog items into the six service collections behind the
-// patient Home screen's service tiles (Lab, Vaccination, Chronic Illness,
-// Health Screening, Pharmacy, Insurance). These collections are
-// write:false to clients (see firestore.rules) — real content management
-// for them is presumably a future admin UI; this script is the interim way
-// to get anything bookable in there at all, same spirit as
-// seedTestDoctor.js.
+// Seeds sample catalog items into the five bookable service collections
+// behind the patient Home screen's service tiles (Lab, Vaccination, Health
+// Screening, Pharmacy, Insurance — Chronic Illness moved to its own
+// vitals-log + check-in screen, see ChronicHome.js, and no longer uses a
+// catalog). These collections are write:false to clients (see
+// firestore.rules) — real content management for them is presumably a
+// future admin UI; this script is the interim way to get anything bookable
+// in there at all, same spirit as seedTestDoctor.js.
 //
 // Usage:
 //   node scripts/seedServiceCatalog.js
@@ -39,23 +40,43 @@ const CATALOG = {
     { id: 'hepatitis-b', name: 'Hepatitis B', description: 'Hepatitis B vaccination series.', price: 30000, icon: 'shield-checkmark', order: 2 },
     { id: 'yellow-fever', name: 'Yellow Fever', description: 'Required for travel to several East African countries.', price: 25000, icon: 'shield-checkmark', order: 3 },
   ],
-  chronicIllness: [
-    { id: 'diabetes-plan', name: 'Diabetes Management Plan', description: 'Ongoing monitoring and consultation plan.', price: 40000, icon: 'heart-circle-outline', order: 1 },
-    { id: 'hypertension-followup', name: 'Hypertension Follow-up', description: 'Routine blood-pressure follow-up consultation.', price: 35000, icon: 'heart-circle-outline', order: 2 },
-  ],
+  // No chronicIllness entry — ChronicHome.js no longer routes through the
+  // generic catalog/booking flow (see that file for why: chronic condition
+  // management is an ongoing relationship, not a one-time purchase). Any
+  // previously-seeded chronicIllness/{diabetes-plan,hypertension-followup}
+  // docs are stale and get cleaned up alongside the pharmacy fix below.
   healthScreening: [
     { id: 'general-checkup', name: 'General Health Checkup', description: 'Full-body baseline health screening.', price: 50000, icon: 'medical-outline', order: 1 },
     { id: 'cancer-screening', name: 'Cancer Screening', description: 'Early-detection screening panel.', price: 80000, icon: 'medical-outline', order: 2 },
   ],
+  // OTC (over-the-counter) items only. An earlier version of this catalog
+  // included Amoxicillin — a prescription-only antibiotic — orderable with
+  // no prescription check at all, since no prescription-issuing feature
+  // exists anywhere in this app yet. That's a real safety/liability gap,
+  // not a nice-to-have: don't add prescription-requiring items here until
+  // pharmacy orders can be linked to a real prescription record.
   pharmacy: [
-    { id: 'paracetamol-500', name: 'Paracetamol 500mg', description: 'Pack of 20 tablets.', price: 5000, icon: 'basket-outline', order: 1 },
-    { id: 'amoxicillin-250', name: 'Amoxicillin 250mg', description: 'Pack of 21 capsules — prescription required.', price: 12000, icon: 'basket-outline', order: 2 },
+    { id: 'paracetamol-500', name: 'Paracetamol 500mg', description: 'Pack of 20 tablets. Pain and fever relief.', price: 5000, icon: 'basket-outline', order: 1 },
+    { id: 'ors-sachets', name: 'Oral Rehydration Salts', description: 'Pack of 10 sachets — for dehydration and diarrhoea.', price: 4000, icon: 'basket-outline', order: 2 },
+    { id: 'multivitamins', name: 'Multivitamin Tablets', description: 'Pack of 30 tablets.', price: 8000, icon: 'basket-outline', order: 3 },
   ],
   insurance: [
     { id: 'basic-plan', name: 'Basic Health Plan', description: 'Covers outpatient consultations and basic lab tests.', price: 100000, icon: 'document-text-outline', order: 1 },
     { id: 'family-plan', name: 'Family Cover Plan', description: 'Covers up to 5 family members, inpatient + outpatient.', price: 250000, icon: 'document-text-outline', order: 2 },
   ],
 };
+
+// Docs from an earlier version of this catalog that no longer belong:
+// amoxicillin-250 (prescription-only, unsafe to self-serve — see the
+// pharmacy comment above) and the two chronicIllness items (that whole
+// collection is now unused — see ChronicHome.js). merge:true on CATALOG
+// above won't remove docs that aren't listed in it anymore, so these need
+// an explicit delete.
+const STALE_DOCS = [
+  ['pharmacy', 'amoxicillin-250'],
+  ['chronicIllness', 'diabetes-plan'],
+  ['chronicIllness', 'hypertension-followup'],
+];
 
 async function main() {
   let batch = db.batch();
@@ -70,8 +91,11 @@ async function main() {
       }
     }
   }
+  for (const [collectionName, id] of STALE_DOCS) {
+    batch.delete(db.collection(collectionName).doc(id));
+  }
   await batch.commit();
-  console.log(`Done. Seeded ${count} catalog items across ${Object.keys(CATALOG).length} collections.`);
+  console.log(`Done. Seeded ${count} catalog items across ${Object.keys(CATALOG).length} collections, removed ${STALE_DOCS.length} stale item(s).`);
 }
 
 main().catch((err) => {

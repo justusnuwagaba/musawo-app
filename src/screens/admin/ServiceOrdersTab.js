@@ -11,12 +11,14 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { showAlert } from '../../components/AppAlert';
 import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../theme/tokens';
 
-const CATEGORY_FILTERS = ['All', 'lab', 'vaccination', 'chronicIllness', 'healthScreening', 'pharmacy', 'insurance'];
+// No chronicIllness — that category no longer creates serviceOrders at all
+// (see ChronicHome.js: it's a vitals-log + check-in screen now, not a
+// catalog booking).
+const CATEGORY_FILTERS = ['All', 'lab', 'vaccination', 'healthScreening', 'pharmacy', 'insurance'];
 const CATEGORY_LABEL = {
   All: 'All',
   lab: 'Lab',
   vaccination: 'Vaccination',
-  chronicIllness: 'Chronic Illness',
   healthScreening: 'Health Screening',
   pharmacy: 'Pharmacy',
   insurance: 'Insurance',
@@ -189,7 +191,7 @@ export default function ServiceOrdersTab() {
           </View>
           <Text style={styles.patientName}>{item.patientName}</Text>
           <Text style={styles.detail}>
-            {item.fulfillmentMethod === 'home' ? 'Home' : 'Facility visit'}
+            {item.fulfillmentMethod === 'home' ? 'Home' : item.fulfillmentMethod === 'facility' ? 'Facility visit' : 'Inquiry'}
             {item.preferredDate ? ` · ${item.preferredDate}` : ''}
             {item.price ? ` · UGX ${item.price.toLocaleString?.() ?? item.price}` : ''}
           </Text>

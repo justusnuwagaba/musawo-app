@@ -190,6 +190,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Self-logged vitals (blood pressure, blood sugar, weight) for chronic
+    // condition tracking — see ChronicHome.js. Scoped to the patient
+    // themselves + admin for now, not any doctor: unlike appointments/
+    // medicalRecords there's no established per-entry doctorId relationship
+    // to scope a wider grant by, so opening this to arbitrary doctors would
+    // be too broad. A "share with your doctor" model is a real future step,
+    // not built here. Append-only — no update/delete — a correction is a
+    // new entry, not an edit, which keeps the log honest.
+    match /vitals/{vitalId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.patientId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     match /chats/{appointmentId} {
       // list checks resource.data.participants — an earlier draft had
       // `allow list: if isSignedIn()` with no participant check, which would

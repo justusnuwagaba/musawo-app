@@ -12,32 +12,29 @@ import SegmentedToggle from '../../components/SegmentedToggle';
 import RadarPulse from '../../components/RadarPulse';
 import { showAlert } from '../../components/AppAlert';
 import { boundsForRadius, distanceKm, formatDistance } from '../../utils/geo';
+import { getServiceCategoryConfig } from '../../config/serviceCategories';
 import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../theme/tokens';
 
-// Categories where a "Home" visit gets matched to a real nearby available
-// doctor (Uber-style geohash matching, same technique as FindDoctorScreen),
-// rather than just recording a preference — starting with vaccination since
-// a licensed doctor administering it at a patient's home is both medically
-// reasonable and, in East Africa specifically, a real way to put
-// underemployed/licensed-but-idle doctors to work. Extend this list as more
-// categories earn the same treatment.
-const HOME_VISIT_MATCHING_CATEGORIES = ['vaccination'];
 const HOME_VISIT_RADIUS_KM = 15; // tighter than FindDoctorScreen's 50km — a home visit needs to be genuinely nearby
 
-// Generic booking form shared by all six catalog categories (Lab,
-// Vaccination, Chronic Illness, Health Screening, Pharmacy, Insurance) —
-// reached from ServiceScreenTemplate.js, which is itself already
-// parameterized the same way. Writes to the shared serviceOrders
-// collection (see firestore.rules) rather than a per-category one.
+// Generic booking form shared by five of the six catalog categories (Lab,
+// Vaccination, Health Screening, Pharmacy, Insurance — Chronic Illness has
+// its own screen now, see ChronicHome.js) — reached from
+// ServiceScreenTemplate.js, which is itself already parameterized the same
+// way. Writes to the shared serviceOrders collection (see firestore.rules)
+// rather than a per-category one. Per-category behavior (labels, whether
+// fulfillment choice even applies, whether real doctor-matching applies)
+// comes from config/serviceCategories.js, not hardcoded here.
 export default function ServiceBookingScreen({ route, navigation }) {
   const { item, category, categoryLabel } = route.params;
   const { user, profile } = useUserContext();
+  const config = getServiceCategoryConfig(category);
   const [fulfillmentMethod, setFulfillmentMethod] = useState('home');
   const [preferredDate, setPreferredDate] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const supportsHomeMatching = HOME_VISIT_MATCHING_CATEGORIES.includes(category);
+  const supportsHomeMatching = config.supportsHomeMatching;
   const [matchedDoctor, setMatchedDoctor] = useState(null);
   const [loadingMatch, setLoadingMatch] = useState(false);
 
@@ -114,7 +111,7 @@ export default function ServiceBookingScreen({ route, navigation }) {
         price: item.price ?? 0,
         patientId: user.uid,
         patientName: profile?.displayName || 'Patient',
-        fulfillmentMethod,
+        fulfillmentMethod: config.showsFulfillmentChoice ? fulfillmentMethod : null,
         preferredDate: preferredDate.trim(),
         notes: notes.trim(),
         status: 'requested',
@@ -123,9 +120,14 @@ export default function ServiceBookingScreen({ route, navigation }) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      const confirmMessage = matchedDoctor
-        ? `${matchedDoctor.displayName} (${formatDistance(matchedDoctor.distanceKm)} away) has been requested for your home visit.`
-        : `Your ${categoryLabel.toLowerCase()} request has been sent — we'll confirm it shortly.`;
+      let confirmMessage;
+      if (matchedDoctor) {
+        confirmMessage = `${matchedDoctor.displayName} (${formatDistance(matchedDoctor.distanceKm)} away) has been requested for your home visit.`;
+      } else if (category === 'insurance') {
+        confirmMessage = `Thanks — we've received your interest in ${item.name}. A Musawo team member will reach out with details and next steps.`;
+      } else {
+        confirmMessage = `Your ${categoryLabel.toLowerCase()} request has been sent — we'll confirm it shortly.`;
+      }
       showAlert('Request sent', confirmMessage, [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err) {
       console.error('[ServiceBookingScreen] booking error:', err);
@@ -141,19 +143,28 @@ export default function ServiceBookingScreen({ route, navigation }) {
         <View style={styles.itemCard}>
           <Text style={styles.itemName}>{item.name}</Text>
           {!!item.description && <Text style={styles.itemDescription}>{item.description}</Text>}
-          {!!item.price && <Text style={styles.itemPrice}>UGX {item.price.toLocaleString?.() ?? item.price}</Text>}
+          {!!item.price && (
+            <Text style={styles.itemPrice}>
+              {category === 'insurance' ? 'From ' : ''}UGX {item.price.toLocaleString?.() ?? item.price}
+              {category === 'insurance' ? '/month' : ''}
+            </Text>
+          )}
         </View>
 
-        <Text style={styles.label}>How would you like this done?</Text>
-        <SegmentedToggle
-          style={styles.toggle}
-          value={fulfillmentMethod}
-          onChange={setFulfillmentMethod}
-          options={[
-            { value: 'home', label: 'Home' },
-            { value: 'facility', label: 'Visit a facility' },
-          ]}
-        />
+        {config.showsFulfillmentChoice && (
+          <>
+            <Text style={styles.label}>How would you like this done?</Text>
+            <SegmentedToggle
+              style={styles.toggle}
+              value={fulfillmentMethod}
+              onChange={setFulfillmentMethod}
+              options={[
+                { value: 'home', label: config.fulfillmentLabels.home },
+                { value: 'facility', label: config.fulfillmentLabels.facility },
+              ]}
+            />
+          </>
+        )}
 
         {supportsHomeMatching && fulfillmentMethod === 'home' && (
           <View style={styles.matchCard}>
@@ -183,17 +194,19 @@ export default function ServiceBookingScreen({ route, navigation }) {
           </View>
         )}
 
-        <Input label="Preferred date (optional)" placeholder="e.g. Aug 20" value={preferredDate} onChangeText={setPreferredDate} />
+        {config.showsFulfillmentChoice && (
+          <Input label="Preferred date (optional)" placeholder="e.g. Aug 20" value={preferredDate} onChangeText={setPreferredDate} />
+        )}
 
         <Input
-          label="Notes for the provider (optional)"
-          placeholder="Anything they should know before this visit"
+          label={category === 'insurance' ? 'Anything specific you want to know? (optional)' : 'Notes for the provider (optional)'}
+          placeholder={category === 'insurance' ? 'e.g. family size, existing conditions to ask about' : 'Anything they should know before this visit'}
           value={notes}
           onChangeText={setNotes}
           multiline
         />
 
-        <Button title={`Request ${categoryLabel}`} onPress={handleConfirm} loading={submitting} style={styles.confirmButton} />
+        <Button title={config.confirmLabel} onPress={handleConfirm} loading={submitting} style={styles.confirmButton} />
       </ScrollView>
     </SafeAreaView>
   );
