@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import Icon from '@expo/vector-icons/Ionicons';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { httpsCallable } from 'firebase/functions';
 import { collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db as firestore, functions } from '../../config/firebaseConfig';
 import { useUserContext } from '../../context/UserProvider';
+import Avatar from '../../components/Avatar';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import SpecialtyChip from '../../components/SpecialtyChip';
@@ -15,6 +15,15 @@ import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { showAlert } from '../../components/AppAlert';
 import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../theme/tokens';
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function formatJoined(createdAt) {
+  if (!createdAt?.toDate) return null;
+  return createdAt.toDate().toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
 
 // setUserRole stays a Cloud Function call (unlike ban below) — it must set
 // the 'admin'/'superadmin' custom claim that nearly every other collection's
@@ -25,7 +34,15 @@ import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../them
 // see scripts/setUserRole.js for the interim, correctly-privileged workaround.
 const setUserRole = httpsCallable(functions, 'setUserRole');
 
-const ROLE_FILTERS = ['All', 'patient', 'doctor', 'admin', 'superadmin'];
+const ROLE_FILTERS = ['All', 'patient', 'doctor', 'admin', 'superadmin', 'banned'];
+const ROLE_FILTER_LABEL = {
+  All: 'All',
+  patient: 'Patients',
+  doctor: 'Doctors',
+  admin: 'Admins',
+  superadmin: 'Superadmins',
+  banned: 'Banned',
+};
 
 export default function UserManagementTab() {
   const { user: currentUser } = useUserContext();
@@ -52,7 +69,7 @@ export default function UserManagementTab() {
 
   const filtered = useMemo(() => {
     return users.filter((u) => {
-      const matchesRole = roleFilter === 'All' || u.role === roleFilter;
+      const matchesRole = roleFilter === 'All' || (roleFilter === 'banned' ? u.isBanned : u.role === roleFilter);
       const q = search.trim().toLowerCase();
       const matchesSearch = !q || u.displayName?.toLowerCase().includes(q) || u.phone?.includes(q) || u.contactEmail?.toLowerCase().includes(q);
       return matchesRole && matchesSearch;
@@ -164,50 +181,53 @@ export default function UserManagementTab() {
             data={ROLE_FILTERS}
             keyExtractor={(item) => item}
             renderItem={({ item }) => (
-              <SpecialtyChip label={item} selected={item === roleFilter} onPress={() => setRoleFilter(item)} />
+              <SpecialtyChip label={ROLE_FILTER_LABEL[item] ?? item} selected={item === roleFilter} onPress={() => setRoleFilter(item)} />
             )}
             style={styles.chipRow}
           />
           <Button title={`Export CSV (${filtered.length})`} variant="outline" onPress={handleExportCSV} style={styles.exportButton} />
         </View>
       }
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.name}>{item.displayName || 'Unnamed user'}</Text>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>{item.role}</Text>
+      renderItem={({ item }) => {
+        const joined = formatJoined(item.createdAt);
+        return (
+          <View style={styles.card}>
+            <View style={styles.topRow}>
+              <Avatar name={item.displayName} photoURL={item.photoURL} size="sm" />
+              <View style={styles.headerText}>
+                <Text style={styles.name}>{item.displayName || 'Unnamed user'}</Text>
+                <Text style={styles.meta}>{capitalize(item.role)}{joined ? ` · joined ${joined}` : ''}</Text>
+              </View>
+              <View style={[styles.statusPill, item.isBanned && styles.statusPillDanger]}>
+                <Text style={[styles.statusPillText, item.isBanned && styles.statusPillTextDanger]}>
+                  {item.isBanned ? 'Banned' : 'Active'}
+                </Text>
+              </View>
             </View>
-          </View>
-          <Text style={styles.contact}>{item.phone || item.contactEmail || '—'}</Text>
-          {item.isBanned && (
-            <View style={styles.bannedRow}>
-              <Icon name="ban-outline" size={14} color={colors.danger} />
-              <Text style={styles.bannedText}>Banned</Text>
-            </View>
-          )}
-          {item.id !== currentUser?.uid && (
-            <View style={styles.actionsRow}>
-              <Button
-                title={item.isBanned ? 'Unban' : 'Ban'}
-                variant="outline"
-                onPress={() => handleToggleBan(item)}
-                loading={busyUid === item.id}
-                style={styles.actionButton}
-              />
-              <RoleGate allow={['superadmin']}>
+            <Text style={styles.contact}>{item.phone || item.contactEmail || '—'}</Text>
+            {item.id !== currentUser?.uid && (
+              <View style={styles.actionsRow}>
                 <Button
-                  title={item.role === 'admin' ? 'Remove admin' : 'Make admin'}
-                  variant="ghost"
-                  onPress={() => handleToggleAdmin(item)}
+                  title={item.isBanned ? 'Unban' : 'Ban'}
+                  variant="outline"
+                  onPress={() => handleToggleBan(item)}
                   loading={busyUid === item.id}
                   style={styles.actionButton}
                 />
-              </RoleGate>
-            </View>
-          )}
-        </View>
-      )}
+                <RoleGate allow={['superadmin']}>
+                  <Button
+                    title={item.role === 'admin' ? 'Remove admin' : 'Make admin'}
+                    variant="ghost"
+                    onPress={() => handleToggleAdmin(item)}
+                    loading={busyUid === item.id}
+                    style={styles.actionButton}
+                  />
+                </RoleGate>
+              </View>
+            )}
+          </View>
+        );
+      }}
       ListEmptyComponent={<EmptyState icon="people-outline" title="No users found" message="Try a different search or filter." />}
     />
   );
@@ -234,10 +254,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     ...shadow.card,
   },
-  cardHeader: {
+  topRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerText: {
+    flex: 1,
+    marginLeft: spacing.sm,
   },
   name: {
     fontSize: fontSize.md,
@@ -245,33 +268,34 @@ const styles = StyleSheet.create({
     color: colors.ink,
     flexShrink: 1,
   },
-  roleBadge: {
-    backgroundColor: colors.primaryMuted,
+  meta: {
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    marginTop: 2,
+  },
+  statusPill: {
+    flexShrink: 0,
+    marginLeft: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radii.pill,
+    backgroundColor: colors.successLight,
   },
-  roleBadgeText: {
+  statusPillDanger: {
+    backgroundColor: colors.dangerLight,
+  },
+  statusPillText: {
     fontSize: fontSize.xs,
     fontWeight: fontWeight.bold,
-    color: colors.primary,
-    textTransform: 'capitalize',
+    color: colors.success,
+  },
+  statusPillTextDanger: {
+    color: colors.danger,
   },
   contact: {
     fontSize: fontSize.sm,
     color: colors.inkMuted,
-    marginTop: 2,
-  },
-  bannedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginTop: spacing.xs,
-  },
-  bannedText: {
-    fontSize: fontSize.xs,
-    color: colors.danger,
-    fontWeight: fontWeight.bold,
-    marginLeft: 4,
   },
   actionsRow: {
     flexDirection: 'row',
