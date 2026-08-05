@@ -193,9 +193,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   trendBar: {
-    backgroundColor: colors.primary,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    backgroundColor: colors.primaryMuted,
+    borderTopWidth: 2,
+    borderTopColor: colors.primary,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
     minHeight: 3,
   },
   trendAxis: {
