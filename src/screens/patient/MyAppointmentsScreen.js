@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, getDocs, serverTimestamp } from 'firebase/firestore';
@@ -10,7 +10,7 @@ import SegmentedToggle from '../../components/SegmentedToggle';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { showAlert } from '../../components/AppAlert';
-import { colors, spacing } from '../../theme/tokens';
+import { colors, spacing, fontSize, fontWeight } from '../../theme/tokens';
 import { PATIENT_ROUTES } from '../../navigation/routes';
 
 const PAST_STATUSES = ['completed', 'cancelled', 'no_show'];
@@ -109,6 +109,7 @@ export default function MyAppointmentsScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>{t('appointments.myAppointments')}</Text>
       <SegmentedToggle
         style={styles.toggle}
         value={tab}
@@ -157,6 +158,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  title: {
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    color: colors.ink,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
   },
   toggle: {
     marginHorizontal: spacing.lg,
