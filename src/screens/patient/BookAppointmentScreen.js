@@ -10,7 +10,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import SegmentedToggle from '../../components/SegmentedToggle';
 import { showAlert } from '../../components/AppAlert';
-import { colors, spacing, radii, fontSize, fontWeight } from '../../theme/tokens';
+import { colors, spacing, radii, fontSize, fontWeight, fontFamily } from '../../theme/tokens';
 import { PATIENT_ROUTES } from '../../navigation/routes';
 
 const TIME_SLOTS = ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'];
@@ -369,28 +369,31 @@ const styles = StyleSheet.create({
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginBottom: spacing.lg,
   },
   timeChip: {
-    paddingHorizontal: spacing.md,
+    width: '31%',
+    alignItems: 'center',
     paddingVertical: spacing.sm,
     borderRadius: radii.sm,
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
-    marginRight: spacing.sm,
     marginBottom: spacing.sm,
   },
   timeChipSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
     borderColor: colors.primary,
   },
   timeChipText: {
+    fontFamily: fontFamily.mono,
+    fontSize: fontSize.sm,
     color: colors.inkMuted,
     fontWeight: fontWeight.semibold,
   },
   timeChipTextSelected: {
-    color: colors.onPrimary,
+    color: colors.primary,
   },
   toggle: {
     marginBottom: spacing.xl,
