@@ -17,7 +17,7 @@ import Avatar from '../../components/Avatar';
 import RadarPulse from '../../components/RadarPulse';
 import { showAlert } from '../../components/AppAlert';
 import ReportProblemModal from '../../components/ReportProblemModal';
-import { colors, spacing, fontSize, fontWeight } from '../../theme/tokens';
+import { colors, spacing, fontSize, fontWeight, fontFamily } from '../../theme/tokens';
 
 const generateAgoraToken = httpsCallable(functions, 'generateAgoraToken');
 
@@ -217,35 +217,41 @@ export default function VideoConsultationScreen({ route, navigation }) {
         </View>
       )}
 
-      {status === 'connected' && isVideo && (
-        <View style={styles.durationBadge}>
-          <Text style={styles.durationText}>{formatDuration(duration)}</Text>
-        </View>
-      )}
-
-      <View style={styles.controls}>
-        <TouchableOpacity style={[styles.controlButton, muted && styles.controlButtonActive]} onPress={toggleMute}>
-          <Icon name={muted ? 'mic-off' : 'mic'} size={22} color={colors.white} />
-        </TouchableOpacity>
-        {isVideo && (
-          <>
-            <TouchableOpacity style={[styles.controlButton, cameraOff && styles.controlButtonActive]} onPress={toggleCamera}>
-              <Icon name={cameraOff ? 'videocam-off' : 'videocam'} size={22} color={colors.white} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
-              <Icon name="camera-reverse" size={22} color={colors.white} />
-            </TouchableOpacity>
-          </>
+      <View style={styles.bottomOverlay}>
+        {/* Once connected, RtcSurfaceView takes the full screen and the
+            centered placeholder (which shows the name while
+            connecting/waiting) is gone — this is the only place the other
+            party's name stays visible during an active video call. */}
+        {status === 'connected' && isVideo && (
+          <View style={styles.callInfoRow}>
+            <Text style={styles.callInfoName} numberOfLines={1}>{otherName}</Text>
+            <Text style={styles.callInfoTimer}>{formatDuration(duration)}</Text>
+          </View>
         )}
-        <TouchableOpacity style={[styles.controlButton, speakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
-          <Icon name={speakerOn ? 'volume-high' : 'volume-low'} size={22} color={colors.white} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.controlButton} onPress={() => setReportVisible(true)}>
-          <Icon name="flag-outline" size={22} color={colors.white} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.endButton} onPress={() => endCall(true)}>
-          <Icon name="call" size={22} color={colors.white} style={{ transform: [{ rotate: '135deg' }] }} />
-        </TouchableOpacity>
+        <View style={styles.controls}>
+          <TouchableOpacity style={[styles.controlButton, muted && styles.controlButtonActive]} onPress={toggleMute}>
+            <Icon name={muted ? 'mic-off' : 'mic'} size={22} color={colors.white} />
+          </TouchableOpacity>
+          {isVideo && (
+            <>
+              <TouchableOpacity style={[styles.controlButton, cameraOff && styles.controlButtonActive]} onPress={toggleCamera}>
+                <Icon name={cameraOff ? 'videocam-off' : 'videocam'} size={22} color={colors.white} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
+                <Icon name="camera-reverse" size={22} color={colors.white} />
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity style={[styles.controlButton, speakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
+            <Icon name={speakerOn ? 'volume-high' : 'volume-low'} size={22} color={colors.white} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={() => setReportVisible(true)}>
+            <Icon name="flag-outline" size={22} color={colors.white} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.endButton} onPress={() => endCall(true)}>
+            <Icon name="call" size={22} color={colors.white} style={{ transform: [{ rotate: '135deg' }] }} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ReportProblemModal
@@ -299,19 +305,36 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.white,
   },
-  durationBadge: {
+  bottomOverlay: {
     position: 'absolute',
-    top: spacing.xl,
-    left: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 999,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
-  durationText: {
+  callInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  callInfoName: {
+    flexShrink: 1,
+    marginRight: spacing.sm,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
     color: colors.white,
-    fontWeight: fontWeight.semibold,
+  },
+  // Mono for the duration figure, matching the app's existing convention
+  // for time-like data (e.g. DoctorDashboardScreen's queue countdown) —
+  // kept neutral/white rather than a brand color, since neither
+  // green="self" nor cyan="other party" cleanly describes a call timer.
+  callInfoTimer: {
+    fontFamily: fontFamily.mono,
     fontSize: fontSize.sm,
+    color: colors.white,
   },
   controls: {
     flexDirection: 'row',
@@ -319,10 +342,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
     paddingBottom: spacing.xxl,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   controlButton: {
