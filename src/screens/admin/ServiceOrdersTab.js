@@ -190,12 +190,21 @@ export default function ServiceOrdersTab() {
             </View>
           </View>
           <Text style={styles.patientName}>{item.patientName}</Text>
+          {item.source === 'prescription' && (
+            <View style={styles.prescriptionPill}>
+              <Text style={styles.prescriptionPillText}>From prescription</Text>
+            </View>
+          )}
           <Text style={styles.detail}>
             {item.fulfillmentMethod === 'home' ? 'Home' : item.fulfillmentMethod === 'facility' ? 'Facility visit' : 'Inquiry'}
             {item.preferredDate ? ` · ${item.preferredDate}` : ''}
             {item.price ? ` · UGX ${item.price.toLocaleString?.() ?? item.price}` : ''}
           </Text>
-          {item.fulfillmentMethod === 'home' && (
+          {/* Only vaccination/healthScreening get real doctor-matching (see
+              ServiceBookingScreen) — a pharmacy "home" order is a delivery,
+              nothing ever assigns a doctor to it, so showing "not yet
+              matched to a provider" there would wrongly imply one should be. */}
+          {(item.category === 'vaccination' || item.category === 'healthScreening') && item.fulfillmentMethod === 'home' && (
             <Text style={styles.detail}>
               {item.assignedDoctorName ? `Matched: ${item.assignedDoctorName}` : 'Not yet matched to a provider'}
             </Text>
@@ -284,6 +293,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: fontWeight.bold,
     color: colors.primary,
+  },
+  prescriptionPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.infoLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    marginTop: spacing.xs,
+  },
+  prescriptionPillText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.info,
   },
   patientName: {
     fontSize: fontSize.sm,

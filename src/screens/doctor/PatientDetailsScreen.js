@@ -73,6 +73,12 @@ export default function PatientDetailsScreen({ route, navigation }) {
             style={styles.actionButton}
           />
           <Button
+            title="Prescribe"
+            variant="outline"
+            onPress={() => navigation.navigate(DOCTOR_ROUTES.MEDICAL_RECORDS, { patientId, patientName: displayName, initialType: 'prescription' })}
+            style={styles.actionButton}
+          />
+          <Button
             title="Schedule visit"
             onPress={() => navigation.navigate(DOCTOR_ROUTES.SCHEDULE_APPOINTMENT, { patientId, patientName: displayName })}
             style={styles.actionButton}

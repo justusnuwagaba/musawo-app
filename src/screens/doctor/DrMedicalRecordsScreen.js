@@ -20,14 +20,23 @@ const TYPES = [
 ];
 
 export default function DrMedicalRecordsScreen({ route }) {
-  const { patientId, patientName } = route.params;
+  const { patientId, patientName, initialType } = route.params;
   const { user } = useUserContext();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [type, setType] = useState('note');
+  const [type, setType] = useState(initialType || 'note');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  // Prescription-specific structured fields — composed into the same
+  // title/content shape at submit time, so storage and MedicalRecordsScreen's
+  // existing rendering don't need to change, but authoring a prescription
+  // isn't just two blank free-text boxes anymore.
+  const [dosage, setDosage] = useState('');
+  const [frequency, setFrequency] = useState('');
+  const [duration, setDuration] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const isPrescription = type === 'prescription';
 
   const loadRecords = useCallback(async () => {
     try {
@@ -48,23 +57,37 @@ export default function DrMedicalRecordsScreen({ route }) {
   }, [loadRecords]);
 
   const handleAdd = async () => {
-    if (!title.trim() || !content.trim()) {
+    if (isPrescription) {
+      if (!title.trim() || !dosage.trim() || !frequency.trim()) {
+        showAlert('Missing details', 'Please add the medication name, dosage, and frequency.');
+        return;
+      }
+    } else if (!title.trim() || !content.trim()) {
       showAlert('Missing details', 'Please add a title and details for this record.');
       return;
     }
     setSaving(true);
     try {
+      const composedContent = isPrescription
+        ? `${frequency.trim()}${duration.trim() ? ` for ${duration.trim()}` : ''}.${content.trim() ? ` ${content.trim()}` : ''}`
+        : content.trim();
       await addDoc(collection(firestore, 'medicalRecords'), {
         patientId,
         doctorId: user.uid,
         type,
-        title: title.trim(),
-        content: content.trim(),
+        title: isPrescription ? `${title.trim()} ${dosage.trim()}`.trim() : title.trim(),
+        content: composedContent,
+        ...(isPrescription
+          ? { medicationName: title.trim(), dosage: dosage.trim(), frequency: frequency.trim(), duration: duration.trim() }
+          : {}),
         attachments: [],
         createdAt: serverTimestamp(),
       });
       setTitle('');
       setContent('');
+      setDosage('');
+      setFrequency('');
+      setDuration('');
       await loadRecords();
     } catch (err) {
       console.error('[DrMedicalRecordsScreen] add error:', err);
@@ -92,9 +115,21 @@ export default function DrMedicalRecordsScreen({ route }) {
                   <SpecialtyChip key={t.value} label={t.label} selected={type === t.value} onPress={() => setType(t.value)} />
                 ))}
               </View>
-              <Input placeholder="Title" value={title} onChangeText={setTitle} />
-              <Input placeholder="Details" value={content} onChangeText={setContent} multiline />
-              <Button title="Add record" onPress={handleAdd} loading={saving} />
+              {isPrescription ? (
+                <>
+                  <Input placeholder="Medication name" value={title} onChangeText={setTitle} />
+                  <Input placeholder="Dosage (e.g. 500mg)" value={dosage} onChangeText={setDosage} />
+                  <Input placeholder="Frequency (e.g. Twice daily)" value={frequency} onChangeText={setFrequency} />
+                  <Input placeholder="Duration (optional, e.g. 5 days)" value={duration} onChangeText={setDuration} />
+                  <Input placeholder="Additional instructions (optional)" value={content} onChangeText={setContent} multiline />
+                </>
+              ) : (
+                <>
+                  <Input placeholder="Title" value={title} onChangeText={setTitle} />
+                  <Input placeholder="Details" value={content} onChangeText={setContent} multiline />
+                </>
+              )}
+              <Button title={isPrescription ? 'Prescribe' : 'Add record'} onPress={handleAdd} loading={saving} />
             </View>
           }
           renderItem={({ item }) => (

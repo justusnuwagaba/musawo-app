@@ -466,13 +466,29 @@ service cloud.firestore {
         resource.data.assignedDoctorId == request.auth.uid ||
         isAdmin()
       );
+      // Two ways to create an order: from the fixed catalog (price
+      // cross-checked against the canonical catalog item, as before — no
+      // chronicIllness anymore, that category doesn't use this collection),
+      // or from a doctor-written prescription (medicalRecords doc with
+      // type=='prescription') — pharmacy only, free (payment-on-delivery,
+      // same manual-reconciliation spirit as the rest of this app), and the
+      // referenced record must actually belong to the requesting patient so
+      // one patient can't order against another's prescription.
       allow create: if isSignedIn()
         && request.resource.data.patientId == request.auth.uid
         && request.resource.data.status == 'requested'
-        && request.resource.data.category in
-             ['lab', 'vaccination', 'chronicIllness', 'healthScreening', 'pharmacy', 'insurance']
-        && request.resource.data.price ==
-             get(/databases/$(database)/documents/$(request.resource.data.category)/$(request.resource.data.itemId)).data.price;
+        && request.resource.data.category in ['lab', 'vaccination', 'healthScreening', 'pharmacy', 'insurance']
+        && (
+          (request.resource.data.source == 'catalog' &&
+           request.resource.data.price ==
+             get(/databases/$(database)/documents/$(request.resource.data.category)/$(request.resource.data.itemId)).data.price)
+          ||
+          (request.resource.data.source == 'prescription' &&
+           request.resource.data.category == 'pharmacy' &&
+           request.resource.data.price == 0 &&
+           get(/databases/$(database)/documents/medicalRecords/$(request.resource.data.itemId)).data.patientId == request.auth.uid &&
+           get(/databases/$(database)/documents/medicalRecords/$(request.resource.data.itemId)).data.type == 'prescription')
+        );
       // Patient may update their own order (e.g. cancel it); the assigned
       // doctor may accept/decline their own home-visit match; admin manages
       // the fulfillment lifecycle (confirm/complete/cancel) via

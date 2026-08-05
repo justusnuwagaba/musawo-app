@@ -106,6 +106,7 @@ export default function ServiceBookingScreen({ route, navigation }) {
     try {
       await addDoc(collection(firestore, 'serviceOrders'), {
         category,
+        source: 'catalog',
         itemId: item.id,
         itemName: item.name,
         price: item.price ?? 0,
