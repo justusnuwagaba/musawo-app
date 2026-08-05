@@ -193,6 +193,11 @@ export default function ServiceOrdersTab() {
             {item.preferredDate ? ` · ${item.preferredDate}` : ''}
             {item.price ? ` · UGX ${item.price.toLocaleString?.() ?? item.price}` : ''}
           </Text>
+          {item.fulfillmentMethod === 'home' && (
+            <Text style={styles.detail}>
+              {item.assignedDoctorName ? `Matched: ${item.assignedDoctorName}` : 'Not yet matched to a provider'}
+            </Text>
+          )}
           {!!item.notes && <Text style={styles.notes}>"{item.notes}"</Text>}
 
           {completingLabId === item.id ? (

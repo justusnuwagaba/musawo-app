@@ -440,8 +440,15 @@ service cloud.firestore {
     // a malformed/attacker-supplied category can't be used to probe an
     // unrelated collection via the dynamic path below.
     match /serviceOrders/{orderId} {
+      // assignedDoctorId is set at booking time when ServiceBookingScreen's
+      // nearby-provider matching finds one (currently: vaccination home
+      // visits) — that doctor needs to see and act on their own assigned
+      // requests via DoctorDashboardScreen's home-visit queue, same as a
+      // patient/admin would.
       allow get, list: if isSignedIn() && (
-        resource.data.patientId == request.auth.uid || isAdmin()
+        resource.data.patientId == request.auth.uid ||
+        resource.data.assignedDoctorId == request.auth.uid ||
+        isAdmin()
       );
       allow create: if isSignedIn()
         && request.resource.data.patientId == request.auth.uid
@@ -450,11 +457,14 @@ service cloud.firestore {
              ['lab', 'vaccination', 'chronicIllness', 'healthScreening', 'pharmacy', 'insurance']
         && request.resource.data.price ==
              get(/databases/$(database)/documents/$(request.resource.data.category)/$(request.resource.data.itemId)).data.price;
-      // Patient may update their own order (e.g. cancel it); admin manages
+      // Patient may update their own order (e.g. cancel it); the assigned
+      // doctor may accept/decline their own home-visit match; admin manages
       // the fulfillment lifecycle (confirm/complete/cancel) via
       // admin/ServiceOrdersTab.js.
       allow update: if isSignedIn() && (
-        resource.data.patientId == request.auth.uid || isAdmin()
+        resource.data.patientId == request.auth.uid ||
+        resource.data.assignedDoctorId == request.auth.uid ||
+        isAdmin()
       );
       allow delete: if false;
     }

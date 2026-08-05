@@ -72,6 +72,7 @@ export default function DoctorDashboardScreen({ navigation }) {
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [ratingSummary, setRatingSummary] = useState({ average: null, count: 0 });
   const [earnings, setEarnings] = useState({ lifetime: 0, thisMonth: 0 });
+  const [homeVisitRequests, setHomeVisitRequests] = useState([]);
   const [now, setNow] = useState(Date.now());
   const expiringRef = useRef(new Set());
 
@@ -112,6 +113,20 @@ export default function DoctorDashboardScreen({ navigation }) {
       ),
       (snap) => setQueueRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => console.error('[DoctorDashboardScreen] queue error:', err)
+    );
+    return unsubscribe;
+  }, [user]);
+
+  // Standing requests where ServiceBookingScreen's nearby matching (see
+  // HOME_VISIT_MATCHING_CATEGORIES there) assigned this doctor to a home
+  // visit — currently vaccination only. Unlike consultationQueue above,
+  // these aren't time-boxed instant-match requests, so no countdown/expiry.
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = onSnapshot(
+      query(collection(firestore, 'serviceOrders'), where('assignedDoctorId', '==', user.uid), where('status', '==', 'requested')),
+      (snap) => setHomeVisitRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error('[DoctorDashboardScreen] home visit requests error:', err)
     );
     return unsubscribe;
   }, [user]);
@@ -182,6 +197,32 @@ export default function DoctorDashboardScreen({ navigation }) {
       });
     } catch (err) {
       console.error('[DoctorDashboardScreen] decline consult error:', err);
+      showAlert('Could not decline', 'Please try again.');
+    }
+  }, []);
+
+  const handleAcceptHomeVisit = useCallback(async (order) => {
+    try {
+      await updateDoc(doc(firestore, 'serviceOrders', order.id), { status: 'confirmed', updatedAt: serverTimestamp() });
+    } catch (err) {
+      console.error('[DoctorDashboardScreen] accept home visit error:', err);
+      showAlert('Could not accept', 'Please try again.');
+    }
+  }, []);
+
+  // Un-assigns rather than cancelling outright — falls back into the
+  // unassigned pool so admin can manually reassign via
+  // admin/ServiceOrdersTab.js, same manual-fallback spirit as everything
+  // else in this app that isn't fully automated yet.
+  const handleDeclineHomeVisit = useCallback(async (order) => {
+    try {
+      await updateDoc(doc(firestore, 'serviceOrders', order.id), {
+        assignedDoctorId: null,
+        assignedDoctorName: null,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error('[DoctorDashboardScreen] decline home visit error:', err);
       showAlert('Could not decline', 'Please try again.');
     }
   }, []);
@@ -320,6 +361,34 @@ export default function DoctorDashboardScreen({ navigation }) {
               </View>
             );
           })
+        )}
+
+        <Text style={styles.sectionTitle}>Home visit requests ({homeVisitRequests.length})</Text>
+        {homeVisitRequests.length === 0 ? (
+          <EmptyState icon="home-outline" title="No home visit requests" message="Patients matched to you for a home visit (e.g. vaccination) will show up here." />
+        ) : (
+          homeVisitRequests.map((order) => (
+            <View key={order.id} style={styles.queueCard}>
+              <View style={styles.queueTopRow}>
+                <View style={styles.queueInfo}>
+                  <Text style={styles.queuePatient}>{order.patientName}</Text>
+                  <Text style={styles.queueSpecialty}>
+                    {order.itemName}
+                    {order.preferredDate ? ` · ${order.preferredDate}` : ''}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.queueActionsRow}>
+                <TouchableOpacity style={styles.declineButton} onPress={() => handleDeclineHomeVisit(order)}>
+                  <Text style={styles.declineText}>Decline</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.acceptButton} onPress={() => handleAcceptHomeVisit(order)}>
+                  <Icon name="checkmark" size={18} color={colors.onPrimary} />
+                  <Text style={styles.acceptText}>Accept</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
