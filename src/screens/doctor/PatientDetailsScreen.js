@@ -83,10 +83,16 @@ export default function PatientDetailsScreen({ route, navigation }) {
         {sortedHistory.length === 0 ? (
           <Text style={styles.emptyText}>No appointments with this patient yet.</Text>
         ) : (
-          sortedHistory.map((appt) => (
-            <View key={appt.id} style={styles.historyCard}>
-              <Icon name="calendar-outline" size={18} color={colors.primary} />
-              <View style={styles.historyInfo}>
+          sortedHistory.map((appt, index) => (
+            <View key={appt.id} style={styles.timelineRow}>
+              <View style={styles.rail}>
+                <View style={[styles.railLine, index === 0 && styles.railLineHidden]} />
+                <View style={styles.iconCircle}>
+                  <Icon name="calendar-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={[styles.railLine, index === sortedHistory.length - 1 && styles.railLineHidden]} />
+              </View>
+              <View style={styles.historyBody}>
                 <Text style={styles.historyDate}>{formatDate(appt.scheduledAt)}</Text>
                 <Text style={styles.historyStatus}>{appt.status} · {appt.specialty}</Text>
               </View>
@@ -150,17 +156,38 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.inkMuted,
   },
-  historyCard: {
+  // Same connected-timeline treatment as MedicalRecordsScreen — a rail
+  // column (line + icon) beside the entry, rather than a separate card per
+  // row, for a chronological list that's the same shape as that one.
+  timelineRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadow.card,
+    marginBottom: spacing.md,
   },
-  historyInfo: {
-    marginLeft: spacing.sm,
+  rail: {
+    width: 40,
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  railLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: colors.border,
+  },
+  railLineHidden: {
+    backgroundColor: 'transparent',
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyBody: {
+    flex: 1,
+    paddingTop: 2,
+    paddingBottom: spacing.sm,
   },
   historyDate: {
     fontSize: fontSize.sm,
