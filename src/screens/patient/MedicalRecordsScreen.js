@@ -7,7 +7,7 @@ import { db as firestore } from '../../config/firebaseConfig';
 import { useUserContext } from '../../context/UserProvider';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../theme/tokens';
+import { colors, spacing, radii, fontSize, fontWeight } from '../../theme/tokens';
 
 const TYPE_ICON = { note: 'document-text-outline', prescription: 'medkit-outline', lab_result: 'flask-outline', diagnosis: 'pulse-outline' };
 
@@ -46,10 +46,14 @@ export default function MedicalRecordsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={<Text style={styles.title}>Medical Records</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.iconCircle}>
-              <Icon name={TYPE_ICON[item.type] ?? 'document-outline'} size={20} color={colors.primary} />
+        renderItem={({ item, index }) => (
+          <View style={styles.timelineRow}>
+            <View style={styles.rail}>
+              <View style={[styles.railLine, index === 0 && styles.railLineHidden]} />
+              <View style={styles.iconCircle}>
+                <Icon name={TYPE_ICON[item.type] ?? 'document-outline'} size={20} color={colors.primary} />
+              </View>
+              <View style={[styles.railLine, index === records.length - 1 && styles.railLineHidden]} />
             </View>
             <View style={styles.cardBody}>
               <Text style={styles.recordTitle}>{item.title || 'Medical record'}</Text>
@@ -84,25 +88,38 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginBottom: spacing.md,
   },
-  card: {
+  // Timeline layout: a rail column (connecting line + icon) beside the
+  // record's text, rather than each entry looking like a separate floating
+  // card — reinforces that this is a single chronological sequence.
+  timelineRow: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadow.card,
+    marginBottom: spacing.md,
+  },
+  rail: {
+    width: 40,
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  railLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: colors.border,
+  },
+  railLineHidden: {
+    backgroundColor: 'transparent',
   },
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radii.pill,
     backgroundColor: colors.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
   },
   cardBody: {
     flex: 1,
+    paddingTop: 2,
+    paddingBottom: spacing.sm,
   },
   recordTitle: {
     fontSize: fontSize.md,
