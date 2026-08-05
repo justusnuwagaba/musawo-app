@@ -157,7 +157,11 @@
     "noRequestedTitle": "Hakuna miadi zilizoombwa",
     "noConfirmedTitle": "Hakuna miadi zilizothibitishwa",
     "noCompletedTitle": "Hakuna miadi zilizokamilika",
-    "noAppointmentsForDoctorMessage": "Zitaonekana hapa wagonjwa watakapopanga miadi na wewe."
+    "noAppointmentsForDoctorMessage": "Zitaonekana hapa wagonjwa watakapopanga miadi na wewe.",
+    "historyTitle": "Historia ya vikao",
+    "noConsultationsTitle": "Hakuna vikao bado",
+    "noConsultationsMessage": "Vikao vilivyokamilika vitaonekana hapa.",
+    "minutesSuffix": "Dakika {{count}}"
   },
   "chat": {
     "chats": "Mazungumzo",

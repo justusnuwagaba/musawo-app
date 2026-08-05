@@ -157,7 +157,11 @@
     "noRequestedTitle": "No requested appointments",
     "noConfirmedTitle": "No confirmed appointments",
     "noCompletedTitle": "No completed appointments",
-    "noAppointmentsForDoctorMessage": "They'll show up here as patients book with you."
+    "noAppointmentsForDoctorMessage": "They'll show up here as patients book with you.",
+    "historyTitle": "Consultation history",
+    "noConsultationsTitle": "No consultations yet",
+    "noConsultationsMessage": "Completed consultations will appear here.",
+    "minutesSuffix": "{{count}} min"
   },
   "chat": {
     "chats": "Chats",

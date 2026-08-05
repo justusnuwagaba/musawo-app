@@ -157,7 +157,11 @@
     "noRequestedTitle": "Tewali ntuuko zisabiddwa",
     "noConfirmedTitle": "Tewali ntuuko zikakasiddwa",
     "noCompletedTitle": "Tewali ntuuko zimaze",
-    "noAppointmentsForDoctorMessage": "Zijja kulabika wano abalwadde nga bakwesibye."
+    "noAppointmentsForDoctorMessage": "Zijja kulabika wano abalwadde nga bakwesibye.",
+    "historyTitle": "Ebyafaayo by'okwesiba",
+    "noConsultationsTitle": "Tewali kwesiba kuweeriddwa",
+    "noConsultationsMessage": "Okwesiba okumaze kujja kulabika wano.",
+    "minutesSuffix": "Eddakiika {{count}}"
   },
   "chat": {
     "chats": "Emboozi",
