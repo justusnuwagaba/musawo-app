@@ -54,11 +54,37 @@ export default function AppointmentCard({ appointment, personName, actions = [] 
 
       {!!actions.length && (
         <View style={styles.actions}>
-          {actions.map((action) => (
-            <TouchableOpacity key={action.label} style={styles.actionButton} onPress={action.onPress}>
-              <Text style={[styles.actionText, action.destructive && styles.cancelText]}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {actions.map((action, index) => {
+            // First action is treated as the primary one (Accept, Start
+            // call, View patient, Join call, etc., depending on context —
+            // every actionsFor()-style caller already orders its array with
+            // the most important action first) and gets a filled pill;
+            // everything else renders as a bordered ghost pill, matching
+            // the mockup's Accept/Decline pairing without hardcoding to
+            // exactly two actions, since some callers pass up to four.
+            const isPrimary = index === 0 && !action.destructive;
+            return (
+              <TouchableOpacity
+                key={action.label}
+                style={[
+                  styles.actionButton,
+                  isPrimary ? styles.actionButtonPrimary : styles.actionButtonGhost,
+                  action.destructive && styles.actionButtonDanger,
+                ]}
+                onPress={action.onPress}
+              >
+                <Text
+                  style={[
+                    styles.actionText,
+                    isPrimary ? styles.actionTextPrimary : styles.actionTextGhost,
+                    action.destructive && styles.actionTextDanger,
+                  ]}
+                >
+                  {action.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
     </View>
@@ -134,20 +160,41 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.sm,
   },
   actionButton: {
-    marginRight: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+    marginRight: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  actionButtonPrimary: {
+    backgroundColor: colors.primary,
+  },
+  actionButtonGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  actionButtonDanger: {
+    borderColor: colors.danger,
   },
   actionText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
+  },
+  actionTextPrimary: {
+    color: colors.onPrimary,
+  },
+  actionTextGhost: {
     color: colors.primary,
   },
-  cancelText: {
+  actionTextDanger: {
     color: colors.danger,
   },
 });
