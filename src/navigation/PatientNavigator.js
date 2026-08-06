@@ -19,6 +19,7 @@ import DoctorApplicationScreen from '../screens/doctor/DoctorApplicationScreen';
 import SettingsScreen from '../screens/patient/SettingsScreen';
 import MyHealth from '../screens/patient/MyHealth';
 import MedicalRecordsScreen from '../screens/patient/MedicalRecordsScreen';
+import HealthTimelineScreen from '../screens/patient/HealthTimelineScreen';
 import LabResultsScreen from '../screens/patient/LabResultsScreen';
 import BloodGroup from '../screens/patient/BloodGroup';
 import PaymentScreen from '../screens/patient/PaymentScreen';
@@ -90,6 +91,7 @@ export function AccountStack() {
       <Stack.Screen name={PATIENT_ROUTES.SETTINGS} component={SettingsScreen} options={{ title: t('account.settings') }} />
       <Stack.Screen name={PATIENT_ROUTES.MY_HEALTH} component={MyHealth} options={{ title: t('account.myHealth') }} />
       <Stack.Screen name={PATIENT_ROUTES.MEDICAL_RECORDS} component={MedicalRecordsScreen} options={{ title: t('account.medicalRecords') }} />
+      <Stack.Screen name={PATIENT_ROUTES.HEALTH_TIMELINE} component={HealthTimelineScreen} options={{ title: 'Health Timeline' }} />
       <Stack.Screen name={PATIENT_ROUTES.FAVORITE_DOCTORS} component={FavoriteDoctorsScreen} options={{ title: t('account.favoriteDoctors') }} />
       <Stack.Screen name={PATIENT_ROUTES.LAB_RESULTS} component={LabResultsScreen} options={{ title: 'Lab Results' }} />
       <Stack.Screen name={PATIENT_ROUTES.BLOOD_GROUP} component={BloodGroup} options={{ title: 'Blood Group' }} />

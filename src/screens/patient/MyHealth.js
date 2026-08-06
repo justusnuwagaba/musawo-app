@@ -6,6 +6,7 @@ import { colors, spacing, radii, fontSize, fontWeight, shadow } from '../../them
 import { PATIENT_ROUTES } from '../../navigation/routes';
 
 const HEALTH_ITEMS = [
+  { id: '0', title: 'Health Timeline', icon: 'time-outline', route: PATIENT_ROUTES.HEALTH_TIMELINE },
   { id: '1', title: 'Medical Records', icon: 'document-text-outline', route: PATIENT_ROUTES.MEDICAL_RECORDS },
   { id: '2', title: 'Lab Results', icon: 'flask-outline', route: PATIENT_ROUTES.LAB_RESULTS },
   { id: '3', title: 'Blood Group', icon: 'water-outline', route: PATIENT_ROUTES.BLOOD_GROUP },

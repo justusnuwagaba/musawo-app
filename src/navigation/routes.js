@@ -38,6 +38,7 @@ export const PATIENT_ROUTES = {
   SETTINGS: 'Settings',
   MY_HEALTH: 'MyHealth',
   MEDICAL_RECORDS: 'MedicalRecords',
+  HEALTH_TIMELINE: 'HealthTimeline',
   LAB_RESULTS: 'LabResults',
   BLOOD_GROUP: 'BloodGroup',
   PAYMENT: 'Payment',
